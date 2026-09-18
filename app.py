@@ -687,3 +687,194 @@ elif pagina == "Salas":
                     )
 
                     st.rerun()
+
+# -------------------------
+# PROFESSORES
+# -------------------------
+
+elif pagina == "Professores":
+
+    st.header("👨‍🏫 Cadastro de Professores")
+
+    # CADASTRAR PROFESSOR
+    with st.form("form_professor"):
+
+        nome = st.text_input("Nome do professor")
+        email = st.text_input("E-mail")
+        departamento = st.text_input("Departamento / Curso")
+
+        cadastrar_professor = st.form_submit_button(
+            "Cadastrar Professor"
+        )
+
+        if cadastrar_professor:
+
+            if (
+                nome.strip() == ""
+                or email.strip() == ""
+                or departamento.strip() == ""
+            ):
+
+                st.warning("Preencha todos os campos.")
+
+            else:
+
+                conexao = sqlite3.connect("reservas.db")
+                cursor = conexao.cursor()
+
+                try:
+
+                    cursor.execute(
+                        """
+                        INSERT INTO professores
+                        (nome, email, departamento)
+                        VALUES (?, ?, ?)
+                        """,
+                        (
+                            nome,
+                            email,
+                            departamento
+                        )
+                    )
+
+                    conexao.commit()
+
+                    st.success(
+                        "Professor cadastrado com sucesso!"
+                    )
+
+                    st.rerun()
+
+                except sqlite3.IntegrityError:
+
+                    st.error(
+                        "Já existe um professor cadastrado "
+                        "com esse e-mail."
+                    )
+
+                finally:
+
+                    conexao.close()
+
+    # LISTAR PROFESSORES
+    st.divider()
+
+    st.subheader("📋 Professores cadastrados")
+
+    conexao = sqlite3.connect("reservas.db")
+
+    professores = pd.read_sql_query(
+        "SELECT * FROM professores ORDER BY nome",
+        conexao
+    )
+
+    conexao.close()
+
+    if professores.empty:
+
+        st.info("Nenhum professor cadastrado.")
+
+    else:
+
+        st.dataframe(
+            professores,
+            width="stretch"
+        )
+
+        # EDITAR OU EXCLUIR
+        st.divider()
+
+        st.subheader("✏️ Editar ou Excluir Professor")
+
+        professor_selecionado = st.selectbox(
+            "Selecione um professor",
+            professores["nome"].tolist(),
+            key="editar_professor"
+        )
+
+        dados_professor = professores[
+            professores["nome"] == professor_selecionado
+        ].iloc[0]
+
+        novo_nome_professor = st.text_input(
+            "Nome",
+            value=str(dados_professor["nome"]),
+            key="novo_nome_professor"
+        )
+
+        novo_email = st.text_input(
+            "E-mail",
+            value=str(dados_professor["email"]),
+            key="novo_email_professor"
+        )
+
+        novo_departamento = st.text_input(
+            "Departamento / Curso",
+            value=str(dados_professor["departamento"]),
+            key="novo_departamento_professor"
+        )
+
+        col_editar_prof, col_excluir_prof = st.columns(2)
+
+        # SALVAR ALTERAÇÕES
+        with col_editar_prof:
+
+            if st.button(
+                "💾 Salvar Alterações",
+                key="salvar_professor",
+                use_container_width=True
+            ):
+
+                if (
+                    novo_nome_professor.strip() == ""
+                    or novo_email.strip() == ""
+                    or novo_departamento.strip() == ""
+                ):
+
+                    st.warning(
+                        "Nenhum campo pode ficar vazio."
+                    )
+
+                else:
+
+                    conexao = sqlite3.connect("reservas.db")
+                    cursor = conexao.cursor()
+
+                    try:
+
+                        cursor.execute(
+                            """
+                            UPDATE professores
+
+                            SET nome = ?,
+                                email = ?,
+                                departamento = ?
+
+                            WHERE id = ?
+                            """,
+                            (
+                                novo_nome_professor,
+                                novo_email,
+                                novo_departamento,
+                                int(dados_professor["id"])
+                            )
+                        )
+
+                        conexao.commit()
+
+                        st.success(
+                            "Professor atualizado com sucesso!"
+                        )
+
+                        st.rerun()
+
+                    except sqlite3.IntegrityError:
+
+                        st.error(
+                            "Este e-mail já está sendo "
+                            "utilizado por outro professor."
+                        )
+
+                    finally:
+
+                        conexao.close()
