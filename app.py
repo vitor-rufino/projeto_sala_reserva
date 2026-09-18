@@ -129,7 +129,8 @@ if st.sidebar.button(
     st.session_state.usuario_nome = ""
     st.session_state.usuario_tipo = ""
 
-    st.rerun()# -------------------------
+    st.rerun()
+# -------------------------
 # CONTROLE DE LOGIN
 # -------------------------
 
