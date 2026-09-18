@@ -878,3 +878,54 @@ elif pagina == "Professores":
                     finally:
 
                         conexao.close()
+
+        # EXCLUIR PROFESSOR
+        with col_excluir_prof:
+
+            if st.button(
+                "🗑️ Excluir Professor",
+                key="excluir_professor",
+                use_container_width=True
+            ):
+
+                conexao = sqlite3.connect("reservas.db")
+                cursor = conexao.cursor()
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM reservas
+                    WHERE professor_id = ?
+                    """,
+                    (int(dados_professor["id"]),)
+                )
+
+                total_reservas = cursor.fetchone()[0]
+
+                if total_reservas > 0:
+
+                    st.error(
+                        "Não é possível excluir este professor "
+                        "porque existem reservas vinculadas a ele."
+                    )
+
+                    conexao.close()
+
+                else:
+
+                    cursor.execute(
+                        """
+                        DELETE FROM professores
+                        WHERE id = ?
+                        """,
+                        (int(dados_professor["id"]),)
+                    )
+
+                    conexao.commit()
+                    conexao.close()
+
+                    st.success(
+                        "Professor excluído com sucesso!"
+                    )
+
+                    st.rerun()                       
