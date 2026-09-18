@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 
-from banco import criar_banco
+from banco import criar_banco, criar_usuarios_iniciais
 
 criar_banco()
+criar_usuarios_iniciais()
 
 st.set_page_config(
     page_title="Sistema de Reserva de Salas",
