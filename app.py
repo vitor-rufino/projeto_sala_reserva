@@ -1252,4 +1252,328 @@ elif pagina == "Reservas":
                         "Reserva cancelada com sucesso!"
                     )
 
-                    st.rerun()                       
+                    st.rerun() 
+# -------------------------
+# RESERVAS
+# -------------------------
+
+elif pagina == "Reservas":
+
+    st.header("📅 Solicitação de Reserva")
+
+    conexao = sqlite3.connect("reservas.db")
+
+    professores = pd.read_sql_query(
+        "SELECT * FROM professores ORDER BY nome",
+        conexao
+    )
+
+    salas = pd.read_sql_query(
+        "SELECT * FROM salas ORDER BY nome",
+        conexao
+    )
+
+    conexao.close()
+
+    if professores.empty or salas.empty:
+
+        st.warning(
+            "É necessário cadastrar pelo menos um professor "
+            "e uma sala antes de realizar uma reserva."
+        )
+
+    else:
+
+        with st.form("form_reserva"):
+
+            if st.session_state.usuario_tipo == "Professor":
+
+                professor_nome = st.session_state.usuario_nome
+
+                st.text_input(
+                    "Professor",
+                    value=professor_nome,
+                    disabled=True
+                )
+
+            else:
+
+                professor_nome = st.selectbox(
+                    "Professor",
+                    professores["nome"].tolist()
+                )
+
+            sala_nome = st.selectbox(
+                "Sala",
+                salas["nome"].tolist()
+            )
+
+            data = st.date_input(
+                "Data da reserva"
+            )
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                horario_inicio = st.time_input(
+                    "Horário de início"
+                )
+
+            with col2:
+                horario_fim = st.time_input(
+                    "Horário de término"
+                )
+
+            finalidade = st.text_area(
+                "Finalidade da reserva",
+                placeholder="Ex.: Aula de Redes de Computadores"
+            )
+
+            reservar = st.form_submit_button(
+                "Solicitar Reserva"
+            )
+
+            if reservar:
+
+                if horario_fim <= horario_inicio:
+
+                    st.error(
+                        "O horário de término deve ser posterior "
+                        "ao horário de início."
+                    )
+
+                elif finalidade.strip() == "":
+
+                    st.warning(
+                        "Informe a finalidade da reserva."
+                    )
+
+                else:
+
+                    professor_id = int(
+                        professores.loc[
+                            professores["nome"] == professor_nome,
+                            "id"
+                        ].iloc[0]
+                    )
+
+                    sala_id = int(
+                        salas.loc[
+                            salas["nome"] == sala_nome,
+                            "id"
+                        ].iloc[0]
+                    )
+
+                    data_texto = data.strftime("%Y-%m-%d")
+                    inicio_texto = horario_inicio.strftime("%H:%M")
+                    fim_texto = horario_fim.strftime("%H:%M")
+
+                    conexao = sqlite3.connect("reservas.db")
+                    cursor = conexao.cursor()
+
+                    cursor.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM reservas
+                        WHERE sala_id = ?
+                        AND data = ?
+                        AND status NOT IN ('Recusada', 'Cancelada')
+                        AND horario_inicio < ?
+                        AND horario_fim > ?
+                        """,
+                        (
+                            sala_id,
+                            data_texto,
+                            fim_texto,
+                            inicio_texto
+                        )
+                    )
+
+                    conflito = cursor.fetchone()[0]
+
+                    if conflito > 0:
+
+                        st.error(
+                            "❌ Esta sala já possui uma reserva "
+                            "nesse período."
+                        )
+
+                    else:
+
+                        cursor.execute(
+                            """
+                            INSERT INTO reservas
+                            (
+                                professor_id,
+                                sala_id,
+                                data,
+                                horario_inicio,
+                                horario_fim,
+                                finalidade,
+                                status
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                professor_id,
+                                sala_id,
+                                data_texto,
+                                inicio_texto,
+                                fim_texto,
+                                finalidade,
+                                "Pendente"
+                            )
+                        )
+
+                        conexao.commit()
+
+                        st.success(
+                            "✅ Reserva solicitada com sucesso!"
+                        )
+
+                    conexao.close()
+
+    st.divider()
+
+    st.subheader("📋 Reservas realizadas")
+
+    conexao = sqlite3.connect("reservas.db")
+
+    if st.session_state.usuario_tipo == "Professor":
+
+        reservas = pd.read_sql_query(
+            """
+            SELECT
+                reservas.id,
+                professores.nome AS professor,
+                salas.nome AS sala,
+                reservas.data,
+                reservas.horario_inicio AS inicio,
+                reservas.horario_fim AS fim,
+                reservas.finalidade,
+                reservas.status
+            FROM reservas
+            INNER JOIN professores
+                ON reservas.professor_id = professores.id
+            INNER JOIN salas
+                ON reservas.sala_id = salas.id
+            WHERE professores.nome = ?
+            ORDER BY reservas.data, reservas.horario_inicio
+            """,
+            conexao,
+            params=(st.session_state.usuario_nome,)
+        )
+
+    else:
+
+        reservas = pd.read_sql_query(
+            """
+            SELECT
+                reservas.id,
+                professores.nome AS professor,
+                salas.nome AS sala,
+                reservas.data,
+                reservas.horario_inicio AS inicio,
+                reservas.horario_fim AS fim,
+                reservas.finalidade,
+                reservas.status
+            FROM reservas
+            INNER JOIN professores
+                ON reservas.professor_id = professores.id
+            INNER JOIN salas
+                ON reservas.sala_id = salas.id
+            ORDER BY reservas.data, reservas.horario_inicio
+            """,
+            conexao
+        )
+
+    conexao.close()
+
+    if reservas.empty:
+
+        st.info("Nenhuma reserva realizada.")
+
+    else:
+
+        st.dataframe(
+            reservas,
+            width="stretch"
+        )
+
+        reservas_ativas = reservas[
+            reservas["status"].isin(["Pendente", "Aprovada"])
+        ]
+
+        st.divider()
+        st.subheader("🚫 Cancelar Reserva")
+
+        if reservas_ativas.empty:
+
+            st.info(
+                "Não existem reservas disponíveis para cancelamento."
+            )
+
+        else:
+
+            opcoes_reservas = {}
+
+            for _, reserva in reservas_ativas.iterrows():
+
+                descricao = (
+                    f"Reserva #{reserva['id']} - "
+                    f"{reserva['professor']} - "
+                    f"{reserva['sala']} - "
+                    f"{reserva['data']} - "
+                    f"{reserva['inicio']} às {reserva['fim']}"
+                )
+
+                opcoes_reservas[descricao] = int(
+                    reserva["id"]
+                )
+
+            reserva_selecionada = st.selectbox(
+                "Selecione a reserva que deseja cancelar",
+                list(opcoes_reservas.keys())
+            )
+
+            confirmar_cancelamento = st.checkbox(
+                "Confirmo que desejo cancelar esta reserva."
+            )
+
+            if st.button(
+                "🚫 Cancelar Reserva",
+                width="stretch"
+            ):
+
+                if not confirmar_cancelamento:
+
+                    st.warning(
+                        "Marque a confirmação antes de cancelar."
+                    )
+
+                else:
+
+                    reserva_id = opcoes_reservas[
+                        reserva_selecionada
+                    ]
+
+                    conexao = sqlite3.connect("reservas.db")
+                    cursor = conexao.cursor()
+
+                    cursor.execute(
+                        """
+                        UPDATE reservas
+                        SET status = 'Cancelada'
+                        WHERE id = ?
+                        """,
+                        (reserva_id,)
+                    )
+
+                    conexao.commit()
+                    conexao.close()
+
+                    st.success(
+                        "Reserva cancelada com sucesso!"
+                    )
+
+                    st.rerun()                      
