@@ -432,3 +432,258 @@ if pagina == "Início":
             "Use o menu lateral para cadastrar salas, "
             "professores, gerenciar reservas e analisar solicitações."
         )
+
+# -------------------------
+# SALAS
+# -------------------------
+
+elif pagina == "Salas":
+
+    st.header("🏫 Cadastro de Salas")
+
+    # CADASTRAR SALA
+    with st.form("form_sala"):
+
+        nome = st.text_input("Nome da sala")
+
+        capacidade = st.number_input(
+            "Capacidade",
+            min_value=1,
+            step=1
+        )
+
+        localizacao = st.text_input("Localização")
+
+        projetor = st.selectbox(
+            "Possui projetor?",
+            ["Sim", "Não"]
+        )
+
+        computadores = st.number_input(
+            "Quantidade de computadores",
+            min_value=0,
+            step=1
+        )
+
+        cadastrar = st.form_submit_button(
+            "Cadastrar Sala"
+        )
+
+        if cadastrar:
+
+            if nome.strip() == "" or localizacao.strip() == "":
+
+                st.warning(
+                    "Preencha todos os campos obrigatórios."
+                )
+
+            else:
+
+                conexao = sqlite3.connect("reservas.db")
+                cursor = conexao.cursor()
+
+                cursor.execute(
+                    """
+                    INSERT INTO salas
+                    (
+                        nome,
+                        capacidade,
+                        localizacao,
+                        projetor,
+                        computadores,
+                        status
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        nome,
+                        capacidade,
+                        localizacao,
+                        projetor,
+                        computadores,
+                        "Disponível"
+                    )
+                )
+
+                conexao.commit()
+                conexao.close()
+
+                st.success(
+                    "Sala cadastrada com sucesso!"
+                )
+
+                st.rerun()
+
+    # LISTAR SALAS
+    st.divider()
+
+    st.subheader("📋 Salas cadastradas")
+
+    conexao = sqlite3.connect("reservas.db")
+
+    salas = pd.read_sql_query(
+        "SELECT * FROM salas ORDER BY nome",
+        conexao
+    )
+
+    conexao.close()
+
+    if salas.empty:
+
+        st.info("Nenhuma sala cadastrada.")
+
+    else:
+
+        st.dataframe(
+            salas,
+            width="stretch"
+        )
+
+        # EDITAR OU EXCLUIR
+        st.divider()
+
+        st.subheader("✏️ Editar ou Excluir Sala")
+
+        sala_selecionada = st.selectbox(
+            "Selecione uma sala",
+            salas["nome"].tolist(),
+            key="editar_sala"
+        )
+
+        dados_sala = salas[
+            salas["nome"] == sala_selecionada
+        ].iloc[0]
+
+        novo_nome = st.text_input(
+            "Novo nome",
+            value=str(dados_sala["nome"])
+        )
+
+        nova_capacidade = st.number_input(
+            "Nova capacidade",
+            min_value=1,
+            value=int(dados_sala["capacidade"]),
+            step=1
+        )
+
+        nova_localizacao = st.text_input(
+            "Nova localização",
+            value=str(dados_sala["localizacao"])
+        )
+
+        novo_projetor = st.selectbox(
+            "Possui projetor?",
+            ["Sim", "Não"],
+            index=0
+            if dados_sala["projetor"] == "Sim"
+            else 1,
+            key="novo_projetor"
+        )
+
+        novos_computadores = st.number_input(
+            "Quantidade de computadores",
+            min_value=0,
+            value=int(dados_sala["computadores"]),
+            step=1
+        )
+
+        col_editar, col_excluir = st.columns(2)
+
+        # SALVAR ALTERAÇÃO
+        with col_editar:
+
+            if st.button(
+                "💾 Salvar Alterações",
+                use_container_width=True
+            ):
+
+                if novo_nome.strip() == "" or nova_localizacao.strip() == "":
+
+                    st.warning(
+                        "Nome e localização não podem ficar vazios."
+                    )
+
+                else:
+
+                    conexao = sqlite3.connect("reservas.db")
+                    cursor = conexao.cursor()
+
+                    cursor.execute(
+                        """
+                        UPDATE salas
+                        SET
+                            nome = ?,
+                            capacidade = ?,
+                            localizacao = ?,
+                            projetor = ?,
+                            computadores = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            novo_nome,
+                            nova_capacidade,
+                            nova_localizacao,
+                            novo_projetor,
+                            novos_computadores,
+                            int(dados_sala["id"])
+                        )
+                    )
+
+                    conexao.commit()
+                    conexao.close()
+
+                    st.success(
+                        "Sala atualizada com sucesso!"
+                    )
+
+                    st.rerun()
+
+        # EXCLUIR SALA
+        with col_excluir:
+
+            if st.button(
+                "🗑️ Excluir Sala",
+                use_container_width=True
+            ):
+
+                conexao = sqlite3.connect("reservas.db")
+                cursor = conexao.cursor()
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM reservas
+                    WHERE sala_id = ?
+                    """,
+                    (int(dados_sala["id"]),)
+                )
+
+                total_reservas = cursor.fetchone()[0]
+
+                if total_reservas > 0:
+
+                    st.error(
+                        "Não é possível excluir esta sala "
+                        "porque ela possui reservas vinculadas."
+                    )
+
+                    conexao.close()
+
+                else:
+
+                    cursor.execute(
+                        """
+                        DELETE FROM salas
+                        WHERE id = ?
+                        """,
+                        (int(dados_sala["id"]),)
+                    )
+
+                    conexao.commit()
+                    conexao.close()
+
+                    st.success(
+                        "Sala excluída com sucesso!"
+                    )
+
+                    st.rerun()
